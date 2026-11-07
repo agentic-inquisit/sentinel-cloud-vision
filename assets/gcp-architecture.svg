@@ -1,0 +1,155 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 1130" width="1100" height="1130" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>Sentinel Cloud Vision: GCP deployment architecture</title>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+    <style>
+      .t  { font-size: 15px; font-weight: 600; fill: #0f172a; }
+      .s  { font-size: 12.5px; fill: #334155; }
+      .l  { font-size: 11.5px; fill: #475569; font-style: italic; }
+      .g  { font-size: 13px; font-weight: 700; letter-spacing: .04em; }
+      .ln { stroke: #475569; stroke-width: 1.6; fill: none; }
+      .tag { font-size: 11px; font-weight: 600; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1100" height="1130" fill="#ffffff"/>
+
+  <!-- ========== CLIENTS ========== -->
+  <g>
+    <rect x="60" y="20" width="280" height="80" rx="10" fill="#f1f5f9" stroke="#64748b" stroke-width="1.5"/>
+    <text x="200" y="52" text-anchor="middle" class="t">Devices / Cameras</text>
+    <text x="200" y="74" text-anchor="middle" class="s">gRPC bidi stream · mTLS + JWT</text>
+
+    <rect x="410" y="20" width="280" height="80" rx="10" fill="#f1f5f9" stroke="#64748b" stroke-width="1.5"/>
+    <text x="550" y="52" text-anchor="middle" class="t">Browser (User)</text>
+    <text x="550" y="74" text-anchor="middle" class="s">HTTPS · SSE/WebSocket · Identity Platform</text>
+
+    <rect x="760" y="20" width="280" height="80" rx="10" fill="#f1f5f9" stroke="#64748b" stroke-width="1.5"/>
+    <text x="900" y="52" text-anchor="middle" class="t">Admin</text>
+    <text x="900" y="74" text-anchor="middle" class="s">HTTPS · IAP</text>
+  </g>
+
+  <!-- clients -> LB -->
+  <line x1="200" y1="100" x2="200" y2="138" class="ln" marker-start="url(#arr)" marker-end="url(#arr)"/>
+  <line x1="550" y1="100" x2="550" y2="138" class="ln" marker-start="url(#arr)" marker-end="url(#arr)"/>
+  <line x1="900" y1="100" x2="900" y2="138" class="ln" marker-start="url(#arr)" marker-end="url(#arr)"/>
+
+  <!-- ========== EXTERNAL LB ========== -->
+  <rect x="40" y="140" width="1020" height="82" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="2.5"/>
+  <rect x="45" y="145" width="1010" height="72" rx="7" fill="none" stroke="#ea580c" stroke-width="1"/>
+  <text x="550" y="170" text-anchor="middle" class="t">Global External Application LB + Cloud Armor</text>
+  <text x="550" y="190" text-anchor="middle" class="s">TLS/mTLS termination · rate limits · WAF · host/path routing</text>
+  <text x="550" y="208" text-anchor="middle" class="s" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">ingest.*   ·   results.*   ·   admin.*</text>
+
+  <!-- LB -> Cloud Run -->
+  <line x1="200" y1="222" x2="200" y2="268" class="ln" marker-start="url(#arr)" marker-end="url(#arr)"/>
+  <line x1="550" y1="222" x2="550" y2="268" class="ln" marker-end="url(#arr)"/>
+  <line x1="900" y1="222" x2="900" y2="268" class="ln" marker-end="url(#arr)"/>
+  <text x="208" y="250" class="l">serverless NEG</text>
+  <text x="558" y="250" class="l">serverless NEG</text>
+  <text x="908" y="250" class="l">serverless NEG</text>
+
+  <!-- ========== CLOUD RUN ========== -->
+  <rect x="60" y="270" width="280" height="172" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.8"/>
+  <text x="200" y="296" text-anchor="middle" class="t">Cloud Run: ingest</text>
+  <text x="82" y="320" class="s">• JWT / device authZ</text>
+  <text x="82" y="339" class="s">• per-device quotas</text>
+  <text x="82" y="358" class="s">• frame validation</text>
+  <text x="82" y="377" class="s">• sampling / backpressure</text>
+  <text x="82" y="396" class="s">• archive → GCS</text>
+  <text x="82" y="415" class="s">• ingress: internal + LB only</text>
+
+  <rect x="410" y="270" width="280" height="112" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.8"/>
+  <text x="550" y="296" text-anchor="middle" class="t">Cloud Run: results</text>
+  <text x="432" y="320" class="s">• JWT authZ</text>
+  <text x="432" y="339" class="s">• live push (SSE)</text>
+  <text x="432" y="358" class="s">• history (REST)</text>
+
+  <rect x="760" y="270" width="280" height="112" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.8"/>
+  <text x="900" y="296" text-anchor="middle" class="t">Cloud Run: admin</text>
+  <text x="782" y="320" class="s">• admin_app.py</text>
+  <text x="782" y="339" class="s">• users · audit log</text>
+
+  <!-- ========== PUB/SUB ========== -->
+  <rect x="410" y="466" width="280" height="58" rx="10" fill="#faf5ff" stroke="#9333ea" stroke-width="1.8"/>
+  <text x="550" y="490" text-anchor="middle" class="t">Pub/Sub: detections</text>
+  <text x="550" y="510" text-anchor="middle" class="s">→ results · Cloud SQL · BigQuery</text>
+
+  <!-- Pub/Sub -> results (subscribe) -->
+  <line x1="550" y1="466" x2="550" y2="384" class="ln" marker-end="url(#arr)"/>
+  <text x="558" y="430" class="l">subscribe</text>
+
+  <!-- ingest -> internal LB -->
+  <line x1="200" y1="442" x2="200" y2="598" class="ln" marker-start="url(#arr)" marker-end="url(#arr)"/>
+  <text x="210" y="510" class="l">Direct VPC egress</text>
+  <text x="210" y="526" class="l">+ Google ID token</text>
+
+  <!-- ========== VPC ========== -->
+  <rect x="20" y="560" width="1060" height="518" rx="14" fill="#f0fdf4" fill-opacity=".45" stroke="#16a34a" stroke-width="2" stroke-dasharray="8 5"/>
+  <text x="1064" y="584" text-anchor="end" class="g" fill="#15803d">VPC (PRIVATE, SAME REGION)</text>
+
+  <!-- Internal LB -->
+  <rect x="60" y="600" width="310" height="72" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="1.8"/>
+  <text x="215" y="624" text-anchor="middle" class="t">Internal Application LB</text>
+  <text x="215" y="643" text-anchor="middle" class="s">Gateway API (gke-l7-rilb)</text>
+  <text x="215" y="661" text-anchor="middle" class="s">HTTP/2 · per-request gRPC · NEGs</text>
+
+  <!-- internal LB -> gateway -->
+  <line x1="200" y1="672" x2="200" y2="738" class="ln" marker-start="url(#arr)" marker-end="url(#arr)"/>
+  <text x="210" y="692" class="l">firewall: Cloud Run subnet only</text>
+
+  <!-- ========== GKE ========== -->
+  <rect x="45" y="702" width="1010" height="258" rx="12" fill="#f0fdfa" stroke="#0d9488" stroke-width="2"/>
+  <text x="1040" y="726" text-anchor="end" class="g" fill="#0f766e">PRIVATE GKE CLUSTER</text>
+
+  <!-- Gateway -->
+  <rect x="80" y="740" width="320" height="112" rx="10" fill="#ffffff" stroke="#0d9488" stroke-width="1.6"/>
+  <text x="100" y="764" class="t">inference-gateway (gRPC)</text>
+  <rect x="300" y="751" width="88" height="18" rx="9" fill="#ccfbf1"/>
+  <text x="344" y="764" text-anchor="middle" class="tag" fill="#0f766e">CPU pool</text>
+  <text x="100" y="788" class="s">• verify ID token / audience</text>
+  <text x="100" y="807" class="s">• pre/post: resize, NMS</text>
+  <text x="100" y="826" class="s">• model &amp; canary routing</text>
+
+  <!-- gateway -> Triton -->
+  <line x1="400" y1="796" x2="518" y2="796" class="ln" marker-start="url(#arr)" marker-end="url(#arr)"/>
+  <text x="459" y="786" text-anchor="middle" class="l">NetworkPolicy</text>
+
+  <!-- Triton -->
+  <rect x="520" y="740" width="500" height="160" rx="10" fill="#ffffff" stroke="#0d9488" stroke-width="1.6"/>
+  <text x="542" y="764" class="t">Triton Inference Server</text>
+  <rect x="880" y="751" width="124" height="18" rx="9" fill="#fef3c7"/>
+  <text x="942" y="764" text-anchor="middle" class="tag" fill="#92400e">GPU pool (L4)</text>
+  <text x="542" y="790" class="s">• FasterRCNN (TorchScript/ONNX) · JAX → ONNX models</text>
+  <text x="542" y="811" class="s">• dynamic batching</text>
+  <text x="542" y="832" class="s">• HPA on queue time / inflight requests</text>
+  <text x="542" y="853" class="s">• node auto-provisioning</text>
+  <text x="542" y="874" class="s">• Workload Identity (no keys)</text>
+
+  <!-- gateway -> Pub/Sub (publish) -->
+  <path d="M390,740 V495 H408" class="ln" marker-end="url(#arr)"/>
+  <text x="398" y="636" class="l">publish</text>
+
+  <!-- GCS -> Triton (models) -->
+  <path d="M300,990 V935 H640 V902" class="ln" marker-end="url(#arr)"/>
+  <text x="470" y="928" text-anchor="middle" class="l">GCS FUSE CSI · models</text>
+
+  <!-- ========== STORAGE ========== -->
+  <rect x="60" y="990" width="300" height="64" rx="10" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+  <text x="210" y="1016" text-anchor="middle" class="t">GCS</text>
+  <text x="210" y="1037" text-anchor="middle" class="s">model registry · archived frames</text>
+
+  <rect x="400" y="990" width="300" height="64" rx="10" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+  <text x="550" y="1016" text-anchor="middle" class="t">Cloud SQL</text>
+  <text x="550" y="1037" text-anchor="middle" class="s">Postgres: users, recent events</text>
+
+  <rect x="740" y="990" width="300" height="64" rx="10" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+  <text x="890" y="1016" text-anchor="middle" class="t">BigQuery</text>
+  <text x="890" y="1037" text-anchor="middle" class="s">detection history · analytics</text>
+
+  <!-- Footer -->
+  <text x="550" y="1108" text-anchor="middle" class="s">Observability: Managed Prometheus · Cloud Monitoring · Cloud Logging</text>
+</svg>
