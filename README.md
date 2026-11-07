@@ -8,6 +8,8 @@
 
 ---
 
+![GCP deployment architecture: Cloud Run gRPC ingestion → VPC → GKE inference](assets/gcp-architecture.svg)
+
 ## 🚀 Quick Start
 
 ### Cloud Server
