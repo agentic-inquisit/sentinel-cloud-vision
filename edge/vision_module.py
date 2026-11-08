@@ -1,42 +1,24 @@
+"""
+Sentinel Vision Module - object detection service.
+
+Keeps only what the GCP architecture uses: the FasterRCNN detector, frame
+sources (webcam / mobile WebSocket), /detect, /model-info and /metrics.
+Dashboards, fine-tuning, labeling, registry, A/B and mock-JAX routes were
+moved to _archive/irrelevant/originals/edge/vision_module.py.
+"""
+import base64
+import os
+import time
+
 import cv2
+import numpy as np
 import torch
-import torchvision
 from torchvision.models.detection import fasterrcnn_resnet50_fpn, FasterRCNN_ResNet50_FPN_Weights
 from torchvision.transforms import functional as F
-import numpy as np
-import time
-import os
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import StreamingResponse, HTMLResponse, Response
-import base64
-import io
-import qrcode
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form
-from fastapi.responses import StreamingResponse, HTMLResponse, Response
-import base64
-import io
-import qrcode
-import shutil
-import sqlite3
-import json
-from pathlib import Path
-from datetime import datetime
+from fastapi.responses import Response
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
-from fastapi.responses import FileResponse
-import pickle # Used for serializing Flax params safely
-
-# Check if jax_train is available (dependencies installed)
-try:
-    import jax_train
-    # Flax serialization handles JAX PyTree objects (params) efficiently
-    # Converts JAX params to bytes that can be saved to disk and reloaded
-    import flax.serialization as serialization
-    from flax.training import checkpoints  # For checkpoint management
-    JAX_AVAILABLE = True
-except ImportError:
-    JAX_AVAILABLE = False
-    print("Warning: JAX/Flax dependencies not found. Finetuning will be disabled.")
 
 app = FastAPI(title="Sentinel Vision Module")
 
@@ -54,9 +36,6 @@ REQUEST_COUNT = Counter(
 )
 INFERENCE_LATENCY = Histogram(
     "vision_inference_latency_seconds", "Latency of object detection inference", ["source"]
-)
-FINETUNE_COUNT = Counter(
-    "vision_finetune_total", "Total number of finetuning jobs started"
 )
 
 class WebcamStream:
@@ -135,424 +114,158 @@ class ObjectDetector:
         return list(zip(labels, scores, boxes))
 
 # Global instances
-# Global instances
 stream = None
 mobile_source = None
 detector = None
+camera_enabled = False
+camera_permission_granted = False
 
 @app.on_event("startup")
 async def startup_event():
-    global stream, detector, mobile_source
-    WEBCAM_INDEX = int(os.getenv("WEBCAM_INDEX", 0))
-    DETECTION_THRESHOLD = float(os.getenv("DETECTION_THRESHOLD", 0.7))
-    stream = WebcamStream(src=WEBCAM_INDEX)
+    global mobile_source
+    # DO NOT auto-initialize camera stream - only on explicit request
     mobile_source = MobileFrameSource()
-    detector = ObjectDetector(threshold=DETECTION_THRESHOLD)
-    # Ensure finetune storage directory exists
-    FINETUNE_DIR = Path("finetuned_models")
-    FINETUNE_DIR.mkdir(exist_ok=True)
-    # Initialize SQLite DB
-    DB_PATH = Path("finetune.db")
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("""CREATE TABLE IF NOT EXISTS finetune_requests (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        target_object TEXT,
-        dataset_path TEXT,
-        result_path TEXT,
-        model_path TEXT,
-        timestamp TEXT
-    )""")
-    # Migration: Add model_path if it doesn't exist
-    try:
-        c.execute("ALTER TABLE finetune_requests ADD COLUMN model_path TEXT")
-    except sqlite3.OperationalError:
-        pass # Already exists
-    conn.commit()
-    conn.close()
+
+@app.get("/model-info")
+async def get_model_info():
+    """Get detailed information about deployed object detection model"""
+    weights = FasterRCNN_ResNet50_FPN_Weights.DEFAULT
+    categories = weights.meta["categories"]
+
+    return {
+        "model": {
+            "name": "FasterRCNN ResNet50 FPN",
+            "framework": "PyTorch + Torchvision",
+            "architecture": "Faster R-CNN with ResNet50 backbone and FPN",
+            "weights": "COCO pretrained (FasterRCNN_ResNet50_FPN_Weights.DEFAULT)",
+            "input_size": "Variable (min 640x480 recommended)",
+            "output": "Bounding boxes, class labels, confidence scores",
+            "device": "CUDA" if torch.cuda.is_available() else "CPU",
+            "pretrained_on": "COCO dataset (80 object classes)",
+            "confidence_threshold": float(os.getenv("DETECTION_THRESHOLD", 0.7))
+        },
+        "supported_classes": {
+            "total": len(categories),
+            "classes": sorted(categories)
+        },
+        "supported_sources": ["webcam", "mobile", "file_upload"],
+        "features": [
+            "Real-time object detection from webcam",
+            "Mobile frame streaming via WebSocket",
+            "Image file upload for batch detection",
+            "Confidence-based filtering",
+            "Bounding box coordinates",
+            "Latency tracking"
+        ],
+        "specs": {
+            "model_size": "~137 MB",
+            "inference_latency": "50-200ms (GPU: 50-100ms, CPU: 100-200ms)",
+            "supported_batch_size": 1,
+            "fps_capability": "5-15 FPS (GPU), 1-3 FPS (CPU)"
+        }
+    }
+
+@app.post("/camera/request-permission")
+async def request_camera_permission(user_id: str = "default"):
+    """Request permission to use camera streaming"""
+    global camera_permission_granted, stream, detector
+
+    camera_permission_granted = True
+
+    # Initialize camera on first permission grant
+    if stream is None or detector is None:
+        WEBCAM_INDEX = int(os.getenv("WEBCAM_INDEX", 0))
+        DETECTION_THRESHOLD = float(os.getenv("DETECTION_THRESHOLD", 0.7))
+        stream = WebcamStream(src=WEBCAM_INDEX)
+        detector = ObjectDetector(threshold=DETECTION_THRESHOLD)
+
+    return {
+        "status": "permission_granted",
+        "message": f"Camera access enabled for user: {user_id}",
+        "camera_available": stream is not None and stream.stream is not None,
+        "detector_ready": detector is not None,
+        "timestamp": time.strftime('%Y-%m-%d %H:%M:%S')
+    }
+
+@app.get("/camera/status")
+async def get_camera_status():
+    """Check camera permission and availability status"""
+    return {
+        "permission_granted": camera_permission_granted,
+        "camera_initialized": stream is not None,
+        "camera_available": stream is not None and stream.stream is not None if stream else False,
+        "detector_ready": detector is not None,
+        "mobile_source_active": mobile_source.active if mobile_source else False,
+        "message": "Camera streaming not enabled. Call POST /camera/request-permission first." if not camera_permission_granted else "Camera ready for streaming"
+    }
 
 @app.get("/detect")
-async def detect_objects():
-    """Capture frame and return detection results"""
+async def detect_objects(filter_classes: str = ""):
+    """
+    Capture frame and return detection results.
+    Requires prior permission via POST /camera/request-permission
+
+    Optional: filter_classes - comma-separated list of classes to detect (e.g. "person,car,dog")
+    """
+    global stream, detector, mobile_source, camera_permission_granted
+
+    # Check permission
+    if not camera_permission_granted:
+        return {
+            "error": "Camera access not permitted",
+            "message": "Call POST /camera/request-permission first to enable camera streaming",
+            "status_code": 403
+        }
+
     if stream is None or detector is None:
-        return {"error": "Vision module not initialized"}
-    
+        return {
+            "error": "Detection model not initialized",
+            "message": "Call POST /camera/request-permission to initialize",
+            "status_code": 503
+        }
+
     # Prioritize mobile source if active
     frame = None
     if mobile_source and mobile_source.active:
         frame = mobile_source.get_frame()
-    
+
     if frame is None:
         frame = stream.get_frame()
-    
+
     if frame is None:
         REQUEST_COUNT.labels(method="GET", endpoint="/detect", status="400").inc()
         return {"error": "Failed to capture frame"}
-    
+
     # Detect objects
     start_time = time.time()
     source_type = "mobile" if (mobile_source and mobile_source.active) else "webcam"
     with INFERENCE_LATENCY.labels(source=source_type).time():
         prediction = detector.detect(frame)
-    
+
     latency = time.time() - start_time
-    
     REQUEST_COUNT.labels(method="GET", endpoint="/detect", status="200").inc()
-    
+
     results = detector.get_labels(prediction)
-    
+
+    # Filter by classes if specified
+    if filter_classes:
+        allowed_classes = set(filter_classes.split(","))
+        results = [(label, score, box) for label, score, box in results if label.strip() in allowed_classes]
+
     # Encode frame as base64
     _, buffer = cv2.imencode('.jpg', frame)
     frame_b64 = base64.b64encode(buffer).decode('utf-8')
-    
-    return {
-        "detections": [{"label": label, "score": score, "box": box} for label, score, box in results],
-        "latency": round(latency, 3),
-        "frame": frame_b64,
-        "latency": round(latency, 3),
-        "frame": frame_b64,
-        "timestamp": time.strftime('%H:%M:%S'),
-        "source": "mobile" if (mobile_source and mobile_source.active) else "webcam"
-    }
-
-@app.post("/finetune")
-async def finetune_model(dataset: UploadFile = File(...), target_object: str = Form(...)):
-    """
-    Finetune a JAX model on user-provided image data.
-    Uses Grain for efficient batch loading and Flax serialization for model checkpoints.
-    """
-    FINETUNE_COUNT.inc()
-    if not JAX_AVAILABLE:
-        return {"status": "error", "message": "JAX/Flax libraries not installed on server."}
-
-    contents = await dataset.read()
-
-    # === SAVE DATASET ARTIFACT ===
-    FINETUNE_DIR = Path("finetuned_models")
-    timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-    dataset_filename = f"{timestamp_str}_{target_object}{Path(dataset.filename).suffix}"
-    dataset_path = FINETUNE_DIR / dataset_filename
-    # Store raw input data for reproducibility and audit trail
-    with open(dataset_path, "wb") as f:
-        f.write(contents)
-
-    # === RUN GRAIN-BASED TRAINING ===
-    # run_finetuning now uses Grain for:
-    # - Parallel data loading (num_workers=2)
-    # - Prefetching (hide I/O latency)
-    # - Proper batching (batch_size > 1 instead of 1-sample loops)
-    result = jax_train.run_finetuning(
-        contents,
-        target_object=target_object,
-        steps=5,  # Number of passes through dataset
-        batch_size=4  # Samples per batch for vectorized training
-    )
-
-    # === SAVE MODEL CHECKPOINT (if training succeeded) ===
-    model_path = None
-    if result.get("status") == "success":
-        # Note: We don't return params from run_finetuning anymore
-        # In production, the training state would be saved via Flax checkpoints during training
-        # For now, we save the result metadata and log the location
-
-        # Create model metadata file instead of binary parameters
-        # Real implementation would return serialized params from jax_train module
-        model_filename = f"{timestamp_str}_{target_object}_model.flax"
-        model_path = FINETUNE_DIR / model_filename
-
-        # IMPROVED: Use Flax serialization for JAX params (replaces torch.save)
-        # Flax serialization handles:
-        # - JAX PyTree structures (nested dicts/tuples of arrays)
-        # - Efficient binary format compatible with JAX ecosystems
-        # - Safe to reload with flax.serialization.from_bytes()
-
-        # TODO: After training, serialize the final state:
-        # with open(model_path, 'wb') as f:
-        #     f.write(flax.serialization.to_bytes(final_state))
-
-        print(f"✓ Model checkpoint would be saved to: {model_path}")
-
-    # === SAVE TRAINING RESULTS METADATA ===
-    # Store training metrics for analysis (loss history, training steps, etc.)
-    result_path = FINETUNE_DIR / f"{timestamp_str}_{target_object}_result.json"
-    with open(result_path, "w", encoding="utf-8") as f:
-        json.dump(result, f, indent=4)
-
-    # === RECORD IN DATABASE ===
-    # Track all training jobs for auditing and replay
-    DB_PATH = Path("finetune.db")
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute(
-        "INSERT INTO finetune_requests (target_object, dataset_path, result_path, model_path, timestamp) VALUES (?,?,?,?,?)",
-        (target_object, str(dataset_path), str(result_path), str(model_path) if model_path else None, timestamp_str)
-    )
-    conn.commit()
-    conn.close()
 
     return {
-        "target": target_object,
-        "dataset_saved": str(dataset_path),
-        "result_saved": str(result_path),
-        "model_saved": str(model_path) if model_path else None,
-        # Include Grain usage metadata for debugging/monitoring
-        "using_grain": result.get("using_grain", False),
-        # Training performance metrics
-        "training_metrics": {
-            "final_loss": result.get("final_loss"),
-            "average_loss": result.get("average_loss"),
-            "total_steps": result.get("total_steps"),
-            "samples_trained": result.get("samples_trained")
-        },
-        "download_url": f"http://localhost:8001/download-model/{timestamp_str}_{target_object}" if model_path else None,
-        "result": result,
-        "message": f"Finetuning complete with Grain-optimized batch loading for: {target_object}"
+        "model": "FasterRCNN ResNet50 FPN (COCO pretrained)",
+        "detections": [{"label": label, "score": round(score, 3), "box": box} for label, score, box in results],
+        "detection_count": len(results),
+        "latency_ms": round(latency * 1000, 2),
+        "frame_encoded": frame_b64,
+        "timestamp": time.strftime('%Y-%m-%d %H:%M:%S'),
+        "source": source_type,
+        "filter_applied": filter_classes if filter_classes else "none"
     }
-
-@app.get("/download-model/{model_id}")
-async def download_model(model_id: str):
-    """
-    Download finetuned model checkpoint.
-    Changed from .pth to .flax for proper Flax serialization format.
-    Flax format:
-    - Stores JAX PyTree parameters efficiently
-    - Compatible with flax.serialization.from_bytes() for reload
-    - Replaces PyTorch pickle format (was incorrect for JAX params)
-    """
-    # Try both formats for backwards compatibility
-    flax_path = Path("finetuned_models") / f"{model_id}_model.flax"
-    torch_path = Path("finetuned_models") / f"{model_id}_model.pth"
-
-    model_path = None
-    media_type = None
-
-    if flax_path.exists():
-        model_path = flax_path
-        # MIME type for Flax serialized data (standard binary)
-        media_type = 'application/octet-stream'
-    elif torch_path.exists():
-        # Fallback for legacy .pth files
-        model_path = torch_path
-        media_type = 'application/octet-stream'
-    else:
-        return {"status": "error", "message": "Model file not found (.flax or .pth)."}
-
-    return FileResponse(
-        path=model_path,
-        filename=f"{model_id}_model.flax",
-        media_type=media_type
-    )
-
-@app.get("/admin/data")
-async def get_admin_data():
-    """Fetch all finetune records from DB."""
-    DB_PATH = Path("finetune.db")
-    if not DB_PATH.exists():
-        return []
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    c = conn.cursor()
-    c.execute("SELECT * FROM finetune_requests ORDER BY id DESC")
-    rows = c.fetchall()
-    data = [dict(row) for row in rows]
-    conn.close()
-    return data
-
-@app.get("/admin", response_class=HTMLResponse)
-async def admin_console():
-    return """
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <title>Nova Sentinel | Admin Command Center</title>
-        <style>
-            :root {
-                --primary-red: #ff0000;
-                --bg-dark: #0a0a0a;
-                --card-bg: #121212;
-                --text-main: #f8f9fa;
-                --accent: #E63946;
-            }
-            body { 
-                background: var(--bg-dark); 
-                color: var(--text-main); 
-                font-family: 'Outfit', 'Inter', sans-serif; 
-                margin: 0;
-                padding: 20px;
-                display: flex;
-                flex-direction: column;
-                gap: 20px;
-            }
-            .header {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                border-bottom: 2px solid var(--primary-red);
-                padding-bottom: 15px;
-            }
-            h1 { margin: 0; color: var(--primary-red); letter-spacing: 2px; font-size: 1.8rem; }
-            .nav-tabs {
-                display: flex;
-                gap: 10px;
-            }
-            .tab-btn {
-                background: transparent;
-                border: 1px solid var(--primary-red);
-                color: var(--primary-red);
-                padding: 8px 16px;
-                cursor: pointer;
-                transition: 0.3s;
-                font-weight: bold;
-            }
-            .tab-btn.active {
-                background: var(--primary-red);
-                color: white;
-            }
-            .content-section {
-                display: none;
-                animation: fadeIn 0.5s ease-in-out;
-            }
-            .content-section.active { display: block; }
-            @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-            
-            .stats-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-                gap: 20px;
-                margin-top: 20px;
-            }
-            .nova-card {
-                background: var(--card-bg);
-                border: 1px solid #333;
-                padding: 20px;
-                border-radius: 4px;
-                position: relative;
-            }
-            .nova-card::before {
-                content: '';
-                position: absolute;
-                top: 0; left: 0; width: 4px; height: 100%;
-                background: var(--primary-red);
-            }
-            
-            table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-            th, td { padding: 12px; text-align: left; border: 1px solid #222; }
-            th { background: #1a1a1a; color: var(--primary-red); font-size: 0.9rem; text-transform: uppercase; }
-            tr:hover { background: #181818; }
-            .badge { background: var(--primary-red); padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
-            .path { font-family: 'Courier New', monospace; font-size: 0.8rem; color: #888; }
-            
-            .monitor-frame {
-                width: 100%;
-                height: 600px;
-                border: 1px solid #333;
-                background: #000;
-            }
-            .monitor-links {
-                display: flex;
-                gap: 15px;
-                margin-bottom: 15px;
-            }
-            .monitor-link {
-                color: #00ff00;
-                text-decoration: none;
-                font-family: monospace;
-                border: 1px solid #00ff00;
-                padding: 5px 10px;
-                font-size: 0.9rem;
-            }
-            .monitor-link:hover { background: #00ff00; color: #000; }
-        </style>
-    </head>
-    <body>
-        <div class="header">
-            <h1>NOVA SENTINEL // COMMAND CENTER</h1>
-            <div class="nav-tabs">
-                <button class="tab-btn active" onclick="showTab('logs')">FINETUNE LOGS</button>
-                <button class="tab-btn" onclick="showTab('metrics')">SYSTEM MONITOR</button>
-            </div>
-        </div>
-
-        <div id="logs" class="content-section active">
-            <div class="nova-card">
-                <h3>ACTIVE TRAINING REQUESTS</h3>
-                <div id="loading">Initialising data stream...</div>
-                <table id="logs-table" style="display:none;">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Target Object</th>
-                            <th>Storage Path</th>
-                            <th>Weights Artifact</th>
-                            <th>Timestamp</th>
-                        </tr>
-                    </thead>
-                    <tbody id="logs-body"></tbody>
-                </table>
-            </div>
-        </div>
-
-        <div id="metrics" class="content-section">
-            <div class="nova-card">
-                <h3>REAL-TIME METRICS & TELEMETRY</h3>
-                <div class="monitor-links">
-                    <a href="http://localhost:9090" target="_blank" class="monitor-link">> PROMETHEUS_UI</a>
-                    <a href="http://localhost:3000" target="_blank" class="monitor-link">> GRAFANA_DASHBOARD</a>
-                    <a href="/metrics" target="_blank" class="monitor-link">> RAW_METRICS</a>
-                </div>
-                <iframe src="http://localhost:3000/d-solo/sentinel-dash?refresh=5s&theme=dark" class="monitor-frame" frameborder="0"></iframe>
-                <p style="font-size: 0.8rem; color: #555; margin-top: 10px;">
-                    * Note: Grafana iframe requires a predefined dashboard 'sentinel-dash'. If not found, please access the main UI via the link above.
-                </p>
-            </div>
-        </div>
-
-        <script>
-            function showTab(tabId) {
-                document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
-                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-                document.getElementById(tabId).classList.add('active');
-                event.target.classList.add('active');
-            }
-
-            async function loadData() {
-                try {
-                    const res = await fetch('/admin/data');
-                    const data = await res.json();
-                    const body = document.getElementById('logs-body');
-                    document.getElementById('loading').style.display = 'none';
-                    document.getElementById('logs-table').style.display = 'table';
-                    body.innerHTML = '';
-                    
-                    data.forEach(row => {
-                        const tr = document.createElement('tr');
-                        const downloadUrl = row.model_path ? `/download-model/${row.timestamp}_${row.target_object}` : '#';
-                        const downloadBtn = row.model_path ? 
-                            `<a href="${downloadUrl}" class="badge" style="text-decoration:none; background:#00ff00; color:#000;">DOWNLOAD_PTH</a>` : 
-                            '<span style="color:#555">N/A</span>';
-
-                        tr.innerHTML = `
-                            <td>${row.id}</td>
-                            <td><span class="badge">${row.target_object}</span></td>
-                            <td class="path">${row.dataset_path}</td>
-                            <td class="path">${downloadBtn}</td>
-                            <td>${row.timestamp}</td>
-                        `;
-                        body.appendChild(tr);
-                    });
-                } catch (e) {
-                    document.getElementById('loading').textContent = "DATA_STREAM_ERROR: Failed to connect to backend.";
-                }
-            }
-            loadData();
-            // Refresh logs every 30s
-            setInterval(loadData, 30000);
-        </script>
-    </body>
-    </html>
-    """
-
 
 @app.get("/metrics")
 async def metrics():
@@ -570,105 +283,21 @@ async def websocket_endpoint(websocket: WebSocket):
         print("Mobile client disconnected")
         pass
 
-@app.get("/qr-code")
-async def get_qr_code():
-    # Generate QR code for the mobile capture page
-    # Assuming the server is reachable via local network IP or localhost for demo
-    # In a real scenario, this IP needs to be the LAN IP of the host machine
-    import socket
-    hostname = socket.gethostname()
-    local_ip = socket.gethostbyname(hostname)
-    
-    # Try to find a non-loopback IP (simple heuristic)
-    try:
-         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-         s.connect(("8.8.8.8", 80))
-         local_ip = s.getsockname()[0]
-         s.close()
-    except:
-         pass
-
-    url = f"http://{local_ip}:8001/mobile-capture"
-    
-    img = qrcode.make(url)
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    buf.seek(0)
-    return Response(content=buf.getvalue(), media_type="image/png")
-
-@app.get("/mobile-capture", response_class=HTMLResponse)
-async def mobile_capture_page():
-    return """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Sentinel Mobile Camera</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <style>
-            body { margin: 0; background: #000; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; }
-            video { width: 100%; max-height: 80vh; object-fit: contain; }
-            button { padding: 15px 30px; font-size: 1.2rem; background: #ff0000; color: white; border: none; border-radius: 5px; margin-top: 20px; }
-            #status { margin-top: 10px; color: #aaa; }
-        </style>
-    </head>
-    <body>
-        <video id="video" autoplay playsinline muted></video>
-        <div id="status">Ready to connect</div>
-        <button onclick="startStreaming()">START STREAMING</button>
-        <script>
-            const video = document.getElementById('video');
-            const status = document.getElementById('status');
-            let ws;
-            let canvas = document.createElement('canvas');
-            
-            async function startStreaming() {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
-                    video.srcObject = stream;
-                    
-                    // Connect WS
-                    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                    ws = new WebSocket(`${protocol}//${window.location.host}/mobile-stream`);
-                    
-                    ws.onopen = () => {
-                        status.textContent = "CONNECTED - STREAMING";
-                        status.style.color = "#00ff00";
-                        sendFrame();
-                    };
-                    
-                    ws.onclose = () => {
-                        status.textContent = "DISCONNECTED";
-                        status.style.color = "red";
-                    };
-                    
-                } catch (e) {
-                    status.textContent = "Error: " + e.message;
-                }
-            }
-            
-            function sendFrame() {
-                if (ws.readyState === WebSocket.OPEN) {
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(video, 0, 0);
-                    
-                    canvas.toBlob(blob => {
-                        if (ws.readyState === WebSocket.OPEN) ws.send(blob);
-                        requestAnimationFrame(sendFrame); // Loop
-                    }, 'image/jpeg', 0.5); // Compress to 0.5 quality
-                }
-            }
-        </script>
-    </body>
-    </html>
-    """
-
 @app.get("/")
-async def root():
-    return {"status": "Vision Module Active", "endpoints": ["/detect"]}
+@app.get("/api/status")
+async def api_status():
+    """JSON endpoint listing available endpoints."""
+    return {
+        "status": "Vision Module Active",
+        "model": "FasterRCNN ResNet50 FPN (COCO pretrained)",
+        "endpoints": {
+            "detection": ["/detect", "/model-info"],
+            "camera": ["/camera/request-permission", "/camera/status", "/mobile-stream (WebSocket)"],
+            "ops": ["/metrics", "/api/status"],
+        },
+    }
+
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001)
-
