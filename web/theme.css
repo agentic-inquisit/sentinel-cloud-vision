@@ -1,60 +1,466 @@
-:root {
-  /* Core Colors */
-  --bg-dark: #0A0A0A;
-  --bg-surface: #121212;
-  --primary-red: #E63946;
-  --primary-red-glow: rgba(230, 57, 70, 0.4);
-  --text-primary: #F8F9FA;
-  --text-secondary: #ADB5BD;
-  --border-color: #333333;
+/* ============================================================================
+   SENTINEL CLOUD VISION - COMPONENT THEME EXTENSIONS
+   ============================================================================
+   Extends globals.css with component-specific styles and visual effects.
+   Primary Theme: Bright Orange (#ff6701) + Off-White (#f2f2f2)
+   ============================================================================ */
 
-  /* Nova Glow Effects */
-  --nova-glow: 0 0 10px var(--primary-red-glow), 0 0 20px rgba(230, 57, 70, 0.1);
-  --transition-speed: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+/* ============================================================================
+   GLOWING EFFECTS FOR VISION/DETECTION COMPONENTS
+   ============================================================================ */
+
+.glow-orange {
+  box-shadow: 0 0 10px rgba(255, 103, 1, 0.4), 0 0 20px rgba(255, 103, 1, 0.1);
 }
 
-body {
-  background-color: var(--bg-dark);
-  color: var(--text-primary);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  margin: 0;
+.glow-orange:hover {
+  box-shadow: 0 0 15px rgba(255, 103, 1, 0.6), 0 0 30px rgba(255, 103, 1, 0.2);
+}
+
+/* ============================================================================
+   DETECTION CARD ENHANCEMENTS
+   ============================================================================ */
+
+.detection-card {
+  background: var(--card-bg);
+  border: 2px solid var(--card-border);
+  border-radius: 4px;
+  padding: 1.5rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.detection-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 15px rgba(255, 103, 1, 0.2);
+  transform: translateY(-2px);
+}
+
+.detection-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 103, 1, 0.1), transparent);
+  transition: left 0.5s ease;
+}
+
+.detection-card:hover::before {
+  left: 100%;
+}
+
+/* ============================================================================
+   ADMIN BADGE & STATUS INDICATORS
+   ============================================================================ */
+
+.admin-badge {
+  color: var(--accent);
+  background: rgba(255, 103, 1, 0.1);
+  border: 1px solid var(--accent);
+  padding: 0.35rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-radius: 20px;
+  display: inline-block;
+}
+
+.status-active {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid #10b981;
+}
+
+.status-inactive {
+  color: #6b7280;
+  background: rgba(107, 114, 128, 0.1);
+  border: 1px solid #6b7280;
+}
+
+.status-processing {
+  color: var(--accent);
+  background: rgba(255, 103, 1, 0.1);
+  border: 1px solid var(--accent);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* ============================================================================
+   VISION STREAM & LIVE DETECTION
+   ============================================================================ */
+
+.stream-container {
+  position: relative;
+  background: var(--surface);
+  border: 2px solid var(--card-border);
+  border-radius: 4px;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  min-height: 300px;
+}
+
+.stream-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.stream-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.stream-container:hover .stream-overlay {
+  opacity: 1;
+}
+
+.stream-controls {
+  position: absolute;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.5rem;
+  z-index: 10;
+}
+
+.detection-badge {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: var(--accent);
+  color: var(--pitch-black);
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  animation: slideDown 0.3s ease;
+}
+
+/* ============================================================================
+   UPLOAD ZONE
+   ============================================================================ */
+
+.upload-zone {
+  border: 2px dashed var(--card-border);
+  border-radius: 4px;
+  padding: 2rem;
+  text-align: center;
+  background: var(--surface);
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.upload-zone:hover {
+  border-color: var(--accent);
+  background: rgba(255, 103, 1, 0.05);
+}
+
+.upload-zone.active {
+  border-color: var(--accent);
+  background: rgba(255, 103, 1, 0.1);
+}
+
+.upload-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  transition: transform 0.3s ease;
+}
+
+.upload-zone:hover .upload-icon {
+  transform: scale(1.1);
+}
+
+/* ============================================================================
+   PROGRESS & LOADING STATES
+   ============================================================================ */
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--surface);
+  border-radius: 4px;
+  overflow: hidden;
+  margin: 1rem 0;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--orange-hover));
+  border-radius: 4px;
+  transition: width 0.3s ease;
+  box-shadow: 0 0 10px rgba(255, 103, 1, 0.5);
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--surface);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.loader .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.loader .dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.loader .dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+/* ============================================================================
+   MODEL TRAINING & ANALYTICS
+   ============================================================================ */
+
+.chart-container {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  padding: 1.5rem;
+  margin: 1rem 0;
+  min-height: 300px;
+}
+
+.metric-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  padding: 1.5rem;
+  text-align: center;
+  flex: 1;
+  min-width: 150px;
+}
+
+.metric-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin: 0.5rem 0;
+  font-family: 'Monaco', monospace;
+}
+
+.metric-label {
+  font-size: 0.9rem;
+  color: var(--dark-gray);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.metric-trend {
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.metric-trend.up {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+}
+
+.metric-trend.down {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+/* ============================================================================
+   NOTIFICATIONS & ALERTS
+   ============================================================================ */
+
+.notification {
+  padding: 1rem 1.5rem;
+  border-radius: 4px;
+  border-left: 4px solid;
+  margin-bottom: 1rem;
+  animation: slideDown 0.3s ease;
+}
+
+.notification-success {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: #10b981;
+  color: #065f46;
+}
+
+.notification-error {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: #ef4444;
+  color: #7f1d1d;
+}
+
+.notification-warning {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: #f59e0b;
+  color: #78350f;
+}
+
+.notification-info {
+  background: rgba(255, 103, 1, 0.1);
+  border-color: var(--accent);
+  color: #3a2a1f;
+}
+
+.notification-close {
+  float: right;
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.3s ease;
+}
+
+.notification-close:hover {
+  opacity: 1;
+}
+
+/* ============================================================================
+   TABS & NAVIGATION
+   ============================================================================ */
+
+.tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--card-border);
+  margin-bottom: 1.5rem;
+  list-style: none;
   padding: 0;
 }
 
-.nova-card {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-color);
-  border-radius: 1px;
-  padding: 1rem;
-  transition: all var(--transition-speed);
-}
-
-.nova-card:hover {
-  border-color: var(--primary-red);
-  box-shadow: var(--nova-glow);
-}
-
-.btn-primary {
-  background: var(--primary-red);
-  color: white;
-  border: none;
-  padding: 0.75rem 1.5rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1px;
+.tab {
+  padding: 1rem 1.5rem;
   cursor: pointer;
-  transition: opacity var(--transition-speed);
+  border: none;
+  background: transparent;
+  color: var(--dark-gray);
+  font-weight: 500;
+  border-bottom: 3px solid transparent;
+  transition: all 0.3s ease;
 }
 
-.btn-primary:hover {
-  opacity: 0.9;
-  box-shadow: 0 0 15px var(--primary-red);
+.tab:hover {
+  color: var(--foreground);
 }
 
-.admin-badge {
-  color: var(--primary-red);
-  border: 1px solid var(--primary-red);
-  padding: 2px 8px;
-  font-size: 0.75rem;
-  text-transform: uppercase;
+.tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ============================================================================
+   TOOLTIPS
+   ============================================================================ */
+
+.tooltip {
+  position: relative;
+  cursor: help;
+  border-bottom: 1px dotted var(--accent);
+}
+
+.tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--pitch-black);
+  color: white;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 1000;
+}
+
+.tooltip::before {
+  content: '';
+  position: absolute;
+  bottom: 115%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 5px solid var(--pitch-black);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 1000;
+}
+
+.tooltip:hover::after,
+.tooltip:hover::before {
+  opacity: 1;
+}
+
+/* ============================================================================
+   RESPONSIVE TWEAKS FOR THEME
+   ============================================================================ */
+
+@media (max-width: 768px) {
+  .stream-container {
+    aspect-ratio: 9 / 16;
+    min-height: 400px;
+  }
+
+  .metric-card {
+    min-width: 120px;
+  }
+
+  .tabs {
+    flex-wrap: wrap;
+  }
+
+  .tab {
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .notification-success {
+    color: #d1fae5;
+  }
+
+  .notification-error {
+    color: #fee2e2;
+  }
+
+  .notification-warning {
+    color: #fef3c7;
+  }
+
+  .notification-info {
+    color: #ffedd5;
+  }
 }
