@@ -182,11 +182,7 @@ sentinel-cloud-vision/
 │
 └── docs/                           # Documentation
     ├── ARCHITECTURE.md             # System design
-    ├── INFERENCE_OPTIMIZATION_DETAILS.md
-    ├── OPTIMIZATION_CODE_REFERENCE.md
-    ├── XLA_COMPLETION_AND_DEPLOYMENT.md
-    ├── XLA_QUICK_REFERENCE.md
-    ├── MOBILE_RUNTIME_REQUIREMENTS.md
+    ├── INFERENCE_OPTIMIZATION_DETAILS.md    
     └── ENDPOINTS_REFERENCE.md
 ```
 
