@@ -186,7 +186,7 @@
             <!-- TIME-SERIES MODELS SECTION -->
             <div class="feature-section">
                 <div class="feature-section-title">⏱️ Time-Series Models</div>
-                <div class="nova-card">
+                <div class="detection-card">
                     <div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.85rem;">
                         <button class="nova-card1" role="button" style="padding: 0.5rem; margin: 0;">
                             <span>TCN-Segmenter</span>
@@ -204,7 +204,7 @@
             <!-- NLP MODELS SECTION -->
             <div class="feature-section">
                 <div class="feature-section-title">💬 NLP Models</div>
-                <div class="nova-card">
+                <div class="detection-card">
                     <div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.85rem;">
                         <button class="nova-card1" role="button" style="padding: 0.5rem; margin: 0;">
                             <span>BERT</span>
@@ -225,7 +225,7 @@
             <!-- TRAINING SECTION -->
             <div class="feature-section">
                 <div class="feature-section-title">🚀 Training & Optimization</div>
-                <div class="nova-card">
+                <div class="detection-card">
                     <div style="display: flex; flex-direction: column; gap: 0.75rem; font-size: 0.85rem;">
                         <div>
                             <label style="color: var(--foreground); font-size: 0.75rem; font-weight: 600;">Target Object:</label>
@@ -255,7 +255,7 @@
             <!-- DATA PROCESSING SECTION -->
             <div class="feature-section">
                 <div class="feature-section-title">⚙️ Data Processing</div>
-                <div class="nova-card">
+                <div class="detection-card">
                     <div style="display: flex; flex-direction: column; gap: 0.75rem; font-size: 0.85rem;">
                         <div>
                             <label style="color: var(--foreground); font-size: 0.75rem; font-weight: 600;">Image Input:</label>
@@ -317,7 +317,7 @@
         <!-- Right Panel: Controls & Alerts -->
         <div style="display: flex; flex-direction: column; gap: 1rem; overflow-y: auto; padding-right: 0.5rem;">
             <!-- Navigation -->
-            <section class="nova-card" style="display: flex; flex-direction: column;">
+            <section class="detection-card" style="display: flex; flex-direction: column;">
             <div>
                 <div
                     style="display: flex; justify-content: flex-end; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
@@ -333,7 +333,7 @@
             </div>
 
             <!-- Alerts Section -->
-            <section class="nova-card">
+            <section class="detection-card">
                 <h3 style="color: var(--accent); margin: 0 0 1rem 0;">ALERTS</h3>
                 <div id="alert-feed" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 200px; overflow-y: auto;">
                     <p style="color: var(--dark-gray); font-size: 0.85rem; margin: 0;">No alerts yet</p>
@@ -341,7 +341,7 @@
             </section>
 
             <!-- Video Generator -->
-        <section class="nova-card" style="display: flex; flex-direction: column; flex: 1;">
+        <section class="detection-card" style="display: flex; flex-direction: column; flex: 1;">
             <h3 style="color: var(--accent); margin: 0 0 1rem 0;">VIDEO GENERATOR</h3>
             <textarea id="video-prompt" placeholder="Enter prompt..."
                 style="width: 100%; background: var(--card-bg); color: var(--foreground); border: 1px solid var(--card-border); padding: 8px; margin-bottom: 8px; border-radius: 4px; font-family: inherit; resize: vertical; min-height: 80px; flex: 1;"></textarea>
@@ -410,7 +410,7 @@
         modal.id = 'qr-modal';
 
         modal.innerHTML = `
-            <div class="nova-card" style="padding: 2rem; align-items: center; justify-content: center; display: flex; flex-direction: column;">
+            <div class="detection-card" style="padding: 2rem; align-items: center; justify-content: center; display: flex; flex-direction: column;">
                 <h2 style="color: var(--accent); margin-bottom: 1rem;">SCAN TO CONNECT</h2>
                 <img id="qr-image" src="" style="width: 250px; height: 250px; border: 2px solid var(--accent); margin-bottom: 1rem; border-radius: 4px;">
                 <p style="text-align: center; color: var(--foreground); margin-bottom: 1rem;">Scan with your mobile camera<br>to start streaming.</p>
@@ -499,7 +499,7 @@
 
                             if (data.detections.length > 0) {
                                 const latestAlert = document.createElement('div');
-                                latestAlert.className = 'nova-card';
+                                latestAlert.className = 'detection-card';
                                 latestAlert.style.marginBottom = '0.5rem';
                                 latestAlert.style.fontSize = '0.8rem';
                                 latestAlert.innerHTML = `<strong>${data.timestamp}</strong><br>` +
