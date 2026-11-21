@@ -151,13 +151,10 @@
                 <div style="font-size: 0.75rem; color: var(--dark-gray); letter-spacing: 0.05em;">Cloud Vision</div>
             </div>
 
-            <!-- Search -->
-            <input type="text" id="model-search" placeholder="Search models..."
-                style="width: 100%; background: var(--card-bg); color: var(--foreground); border: 1px solid var(--card-border); padding: 8px; border-radius: 4px; box-sizing: border-box; font-size: 0.9rem;">
-
             <!-- VISION MODELS SECTION -->
             <div class="feature-section">
                 <div class="feature-section-title">📷 Vision Models</div>
+                <div class="detection-card">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; font-size: 0.9rem;">
                         <span style="font-weight: 600;">Status</span>
                         <div id="conn-status"
@@ -287,10 +284,6 @@
                     style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10;"></canvas>
                 <video id="webcam-feed" autoplay playsinline
                     style="max-width: 100%; max-height: 80%; display: none; border: 2px solid var(--accent); position: relative; z-index: 1; border-radius: 4px;"></video>
-                <button id="start-camera-btn"
-                    style="background: var(--accent); color: var(--pitch-black); border: none; padding: 10px 20px; cursor: pointer; font-size: 1rem; font-weight: bold; border-radius: 4px; z-index: 20; transition: all 0.2s ease;" onmouseover="this.style.boxShadow='0 4px 12px rgba(255, 103, 1, 0.3)'" onmouseout="this.style.boxShadow='';">
-                    START CAMERA
-                </button>
                 <button id="stop-camera-btn"
                     style="background: var(--card-bg-hover); color: var(--foreground); border: 1px solid var(--card-border); padding: 10px 20px; cursor: pointer; font-size: 1rem; font-weight: bold; display: none; border-radius: 4px;">
                     STOP CAMERA
@@ -301,14 +294,6 @@
                 <button id="select-file-btn"
                     style="background: var(--accent); color: var(--pitch-black); border: none; padding: 10px 20px; cursor: pointer; font-size: 1rem; font-weight: bold; border-radius: 4px; transition: all 0.2s ease;" onmouseover="this.style.boxShadow='0 4px 12px rgba(255, 103, 1, 0.3)'" onmouseout="this.style.boxShadow='';">
                     SELECT FILE
-                </button>
-                <button id="connect-edge-btn"
-                    style="background: var(--accent); color: var(--pitch-black); border: none; padding: 10px 20px; cursor: pointer; font-size: 1rem; font-weight: bold; border-radius: 4px; margin-top: 20px; transition: all 0.2s ease;" onmouseover="this.style.boxShadow='0 4px 12px rgba(255, 103, 1, 0.3)'" onmouseout="this.style.boxShadow='';">
-                    CONNECT TO EDGE DEVICE
-                </button>
-                <button id="connect-phone-btn"
-                    style="background: var(--accent); color: var(--pitch-black); border: none; padding: 10px 20px; cursor: pointer; font-size: 1rem; font-weight: bold; border-radius: 4px; margin-top: 20px; transition: all 0.2s ease;" onmouseover="this.style.boxShadow='0 4px 12px rgba(255, 103, 1, 0.3)'" onmouseout="this.style.boxShadow='';">
-                    CONNECT TO PHONE CAMERA
                 </button>
                 <input type="file" id="file-input" accept="video/*" style="display: none;">
             </div>
@@ -324,13 +309,9 @@
                     <a href="http://localhost:8001/admin" target="_blank" class="nova-card1"
                         style="text-decoration: none; padding: 8px 12px;">Admin
                         Console</a>
-                    <button id="nav-login-btn" class="nova-card1"
-                        style="padding: 8px 12px;">Login</button>
-                    <button id="nav-signup-btn" class="nova-card1"
-                        style="padding: 8px 12px;">Sign
-                        up</button>
                 </div>
             </div>
+            </section>
 
             <!-- Alerts Section -->
             <section class="detection-card">
@@ -359,27 +340,9 @@
     </div>
 
     <script>
-        // Model Search Functionality
-        document.getElementById('model-search').addEventListener('input', function (e) {
-            const searchTerm = e.target.value.toLowerCase();
-            const modelButtons = document.querySelectorAll('.model-list .nova-card1');
-
-            modelButtons.forEach(btn => {
-                const text = btn.querySelector('span').textContent.toLowerCase();
-                if (text.includes(searchTerm)) {
-                    btn.style.display = 'flex';
-                } else {
-                    btn.style.display = 'none';
-                }
-            });
-        });
-
         // Camera activation
-        const startCameraBtn = document.getElementById('start-camera-btn');
         const stopCameraBtn = document.getElementById('stop-camera-btn');
         const selectFileBtn = document.getElementById('select-file-btn');
-        const connectEdgeBtn = document.getElementById('connect-edge-btn');
-        const connectPhoneBtn = document.getElementById('connect-phone-btn');
         const fileInput = document.getElementById('file-input');
         const webcamFeed = document.getElementById('webcam-feed');
         const cameraStatus = document.getElementById('camera-status');
@@ -394,48 +357,6 @@
 
         let currentStream = null;
 
-        // QR Code Modal
-        const modal = document.createElement('div');
-        modal.style.display = 'none';
-        modal.style.position = 'fixed';
-        modal.style.top = '0';
-        modal.style.left = '0';
-        modal.style.width = '100%';
-        modal.style.height = '100%';
-        modal.style.background = 'rgba(0,0,0,0.8)';
-        modal.style.zIndex = '1000';
-        modal.style.justifyContent = 'center';
-        modal.style.alignItems = 'center';
-        modal.style.flexDirection = 'column';
-        modal.id = 'qr-modal';
-
-        modal.innerHTML = `
-            <div class="detection-card" style="padding: 2rem; align-items: center; justify-content: center; display: flex; flex-direction: column;">
-                <h2 style="color: var(--accent); margin-bottom: 1rem;">SCAN TO CONNECT</h2>
-                <img id="qr-image" src="" style="width: 250px; height: 250px; border: 2px solid var(--accent); margin-bottom: 1rem; border-radius: 4px;">
-                <p style="text-align: center; color: var(--foreground); margin-bottom: 1rem;">Scan with your mobile camera<br>to start streaming.</p>
-                <button id="close-modal-btn" style="background: var(--accent); color: var(--pitch-black); border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; border-radius: 4px; transition: all 0.2s ease;" onmouseover="this.style.boxShadow='0 4px 12px rgba(255, 103, 1, 0.3)'" onmouseout="this.style.boxShadow='';">CLOSE</button>
-            </div>
-        `;
-        document.body.appendChild(modal);
-
-        document.getElementById('close-modal-btn').addEventListener('click', () => {
-            modal.style.display = 'none';
-        });
-
-        connectPhoneBtn.addEventListener('click', async () => {
-            try {
-                const res = await fetch('http://localhost:8001/qr-code');
-                if (res.ok) {
-                    const blob = await res.blob();
-                    document.getElementById('qr-image').src = URL.createObjectURL(blob);
-                    modal.style.display = 'flex';
-                }
-            } catch (error) {
-                console.error("Error fetching QR code:", error);
-                alert("Failed to connect to backend for QR Code.");
-            }
-        });
         startObjectDetectionBtn.addEventListener('click', toggleCamera);
         stopCameraBtn.addEventListener('click', stopCamera);
 
@@ -460,7 +381,6 @@
 
                 webcamFeed.srcObject = currentStream;
                 webcamFeed.style.display = 'block';
-                startCameraBtn.style.display = 'none';
                 stopCameraBtn.style.display = 'block';
 
                 // Update Start Capturing button to Stop Capturing
@@ -561,7 +481,6 @@
                 webcamFeed.loop = true; // Auto loop for files
                 webcamFeed.play();
 
-                startCameraBtn.style.display = 'block';
                 stopCameraBtn.style.display = 'none';
                 streamOverlay.style.display = 'block';
                 cameraStatus.textContent = `[ FILE: ${file.name} ]`;
@@ -609,13 +528,12 @@
 
             // Reset Start Capturing button
             const btnSpan = startObjectDetectionBtn.querySelector('span');
-            if (btnSpan) btnSpan.textContent = "Start Capturing";
+            if (btnSpan) btnSpan.textContent = "Start Capture";
             startObjectDetectionBtn.style.backgroundColor = ""; // Reset to CSS default
 
             streamOverlay.style.display = 'none';
-            startCameraBtn.style.display = 'block';
             cameraStatus.textContent = '[ CAMERA INACTIVE ]';
-            cameraStatus.style.color = 'var(--text-secondary)';
+            cameraStatus.style.color = 'var(--dark-gray)';
 
             // Clear canvas
             ctx.clearRect(0, 0, detectionCanvas.width, detectionCanvas.height);
@@ -683,7 +601,7 @@
 
                 statusDiv.style.display = 'block';
                 statusDiv.textContent = "[ STATUS: INITIALIZING JAX/FLAX... ]";
-                statusDiv.style.color = 'var(--accent);'
+                statusDiv.style.color = 'var(--accent)'
 
                 try {
                     const res = await fetch('http://localhost:8001/finetune', {
@@ -757,7 +675,7 @@
 
                 resultDiv.style.display = 'block';
                 resultDiv.textContent = "[ STATUS: PROCESSING... ]";
-                resultDiv.style.color = 'var(--accent);'
+                resultDiv.style.color = 'var(--accent)'
 
                 try {
                     const res = await fetch('http://localhost:8000/preprocess', {
