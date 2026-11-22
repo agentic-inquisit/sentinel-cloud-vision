@@ -8,12 +8,12 @@ import jax
 import jax.numpy as jnp
 from jax import jit
 import numpy as np
-import cv2
 from typing import Dict, List, Tuple, Optional
 import time
 from pathlib import Path
 import logging
 
+from preprocess import ImagePreprocessPipeline
 from xla_optimizer import (
     XLAGraphOptimizer,
     TFLiteConverter,
@@ -49,7 +49,8 @@ class OptimizedVisionInference:
         self.model_apply_fn = model_apply_fn
         self.batch_size = batch_size
         self.enable_optimizations = enable_optimizations
-        
+        self.preprocessor = ImagePreprocessPipeline(target_size=224, preserve_aspect=True)
+
         # Initialize optimizers
         self.xla_optimizer = XLAGraphOptimizer()
         self.memory_optimizer = MemoryTransferOptimizer()
@@ -84,30 +85,14 @@ class OptimizedVisionInference:
             self.inference_fn = base_inference
             self.batched_inference_fn = jax.vmap(base_inference)
     
-    def preprocess_image(self, image: np.ndarray, target_size: Tuple[int, int] = (224, 224)) -> jnp.ndarray:
-        """
-        Preprocess image for inference with optimized memory layout
-        """
-        # Resize
-        if image.shape[:2] != target_size:
-            image = cv2.resize(image, target_size)
-        
-        # Normalize
-        image = image.astype(np.float32) / 255.0
-        
-        # Convert to JAX array (single host-to-device transfer)
-        image_jax = jax.device_put(image)
-        
-        return image_jax
-    
     def infer_single(self, image: np.ndarray) -> Dict[str, any]:
         """
         Run inference on single image with XLA optimizations
         """
         start_time = time.perf_counter()
         
-        # Preprocess
-        preprocessed = self.preprocess_image(image)
+        # Preprocess (letterboxed resize + normalise), single host-to-device transfer
+        preprocessed = jax.device_put(self.preprocessor.process(image))
         preprocessed = jnp.expand_dims(preprocessed, axis=0)  # Add batch dim
         
         # Inference (JIT-compiled, fused operations)
@@ -140,15 +125,10 @@ class OptimizedVisionInference:
         start_time = time.perf_counter()
         
         # Preprocess all images
-        preprocessed = []
-        for img in images:
-            prep = self.preprocess_image(img)
-            preprocessed.append(prep)
-        
+        preprocessed = [self.preprocessor.process(img) for img in images]
+
         # Stack into batch (single memory transfer)
-        batch = self.memory_optimizer.batch_transfers(
-            [np.array(p) for p in preprocessed]
-        )
+        batch = self.memory_optimizer.batch_transfers(preprocessed)
         
         # Batched inference (all operations fused by XLA)
         logits_batch = self.batched_inference_fn(batch)
