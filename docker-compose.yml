@@ -1,21 +1,82 @@
-version: '3.8'
+# Local stack. It mirrors the cloud deployment in infra/: the serving image,
+# env var names and migrate step are the same ones Cloud Run uses.
+#
+# Needs in .env (see .env.example): POSTGRES_PASSWORD, USER_JWT_SECRET, ADMIN_JWT_SECRET
+#   docker compose up --build
+#   ADMIN_PASSWORD=... docker compose run --rm -e ADMIN_PASSWORD admin-app \
+#       python -m serving.create_admin admin admin@example.com
+#
+# Kafka/Zookeeper, Spark, Cassandra, Grafana, TorchServe and video-generator were
+# removed: not used by the GCP architecture (_archive/irrelevant/originals/).
 
-# Kafka/Zookeeper, Spark, Cassandra, Grafana, TorchServe (inference-engine) and
-# video-generator were removed: not used by the GCP architecture.
-# Original: _archive/irrelevant/originals/docker-compose.yml
+x-serving-image: &serving-image
+  build:
+    context: .
+    dockerfile: serving/Dockerfile
+  image: sentinel-serving:local
+
+x-database-url: &database-url
+  DATABASE_URL: postgresql+psycopg://sentinel:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/sentinel
 
 services:
-  # --- Web: Frontend (Nginx) ---
-  web:
-    build:
-      context: ./web
-      dockerfile: Dockerfile
-    ports:
-      - "80:80"
-    depends_on:
-      - vision-module
+  # --- Database (Cloud SQL in the cloud) ---
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: sentinel
+      POSTGRES_USER: sentinel
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sentinel -d sentinel"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # no host port: only the apps reach it
 
-  # --- Edge: Vision Module (FasterRCNN object detection) ---
+  # --- One-shot schema migration (a Cloud Run job in the cloud) ---
+  migrate:
+    <<: *serving-image
+    command: ["python", "-m", "serving.migrate"]
+    environment:
+      <<: *database-url
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # --- User API: signup/login, /preprocess, /generate-video ---
+  user-app:
+    <<: *serving-image
+    environment:
+      <<: *database-url
+      APP: user_app
+      PORT: "8000"
+      JWT_SECRET: ${USER_JWT_SECRET:?set USER_JWT_SECRET in .env}
+      CORS_ORIGINS: http://localhost
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # --- Admin API: own port, own signing secret, bound to this machine only ---
+  admin-app:
+    <<: *serving-image
+    environment:
+      <<: *database-url
+      APP: admin_app
+      PORT: "8002"
+      JWT_SECRET: ${ADMIN_JWT_SECRET:?set ADMIN_JWT_SECRET in .env}
+      CORS_ORIGINS: http://localhost:8002
+    ports:
+      - "127.0.0.1:8002:8002"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # --- Edge: vision module (FasterRCNN). Runs on the device in the cloud design. ---
   vision-module:
     build:
       context: .
@@ -28,10 +89,28 @@ services:
     # devices:
     #   - /dev/video0:/dev/video0  # Uncomment if running on Linux with webcam
 
+  # --- Web: dashboard (nginx) ---
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    environment:
+      USER_API_URL: http://localhost:8000
+      VISION_API_URL: http://localhost:8001
+      ADMIN_URL: http://localhost:8002/docs
+    ports:
+      - "80:80"
+    depends_on:
+      - user-app
+      - vision-module
+
   # --- Monitoring: Prometheus ---
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.55.1
     ports:
       - "9090:9090"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+
+volumes:
+  pgdata:
