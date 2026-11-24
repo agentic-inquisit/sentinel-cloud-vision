@@ -114,24 +114,24 @@ class BertFillMask:
         ]
 
 
-class Gpt2Generator:
-    def __init__(self, model_id: str):
-        from transformers import pipeline
+# class Gpt2Generator:
+#     def __init__(self, model_id: str):
+#         from transformers import pipeline
 
-        self.pipe = pipeline("text-generation", model=model_id, device=-1)
+#         self.pipe = pipeline("text-generation", model=model_id, device=-1)
 
-    def predict(self, prompt: str, max_new_tokens: int = 50, temperature: float = 0.8) -> str:
-        kwargs: dict[str, Any] = {"do_sample": temperature > 0}
-        if temperature > 0:
-            kwargs["temperature"] = temperature
-        out = self.pipe(
-            prompt,
-            max_new_tokens=max_new_tokens,
-            pad_token_id=self.pipe.tokenizer.eos_token_id,
-            return_full_text=False,
-            **kwargs,
-        )
-        return out[0]["generated_text"]
+#     def predict(self, prompt: str, max_new_tokens: int = 50, temperature: float = 0.8) -> str:
+#         kwargs: dict[str, Any] = {"do_sample": temperature > 0}
+#         if temperature > 0:
+#             kwargs["temperature"] = temperature
+#         out = self.pipe(
+#             prompt,
+#             max_new_tokens=max_new_tokens,
+#             pad_token_id=self.pipe.tokenizer.eos_token_id,
+#             return_full_text=False,
+#             **kwargs,
+#         )
+#         return out[0]["generated_text"]
 
 
 class TcnModel:
@@ -187,8 +187,8 @@ SPECS: list[ModelSpec] = [
               lambda: SiglipMatcher("google/siglip2-base-patch16-224")),
     ModelSpec("bert", "nlp", "fill-mask", "google-bert/bert-base-uncased",
               lambda: BertFillMask("google-bert/bert-base-uncased")),
-    ModelSpec("gpt2", "nlp", "text-generation", "openai-community/gpt2",
-              lambda: Gpt2Generator("openai-community/gpt2")),
+    # ModelSpec("gpt2", "nlp", "text-generation", "openai-community/gpt2",
+    #           lambda: Gpt2Generator("openai-community/gpt2")),
     ModelSpec("tcn-segmenter", "timeseries", "sequence-segmentation", "your checkpoint: tcn-segmenter.pt",
               lambda: TcnModel("tcn-segmenter")),
     ModelSpec("tcn-sequence", "timeseries", "sequence-classification", "your checkpoint: tcn-sequence.pt",
