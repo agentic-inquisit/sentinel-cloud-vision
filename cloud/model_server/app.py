@@ -137,11 +137,11 @@ def create_app(catalog: ModelCatalog | None = None, key_hashes: frozenset[str] |
     def fill_mask(body: FillMaskIn):
         return {"model": "bert", "predictions": run(catalog, "bert", body.text, top_k=body.top_k)}
 
-    @api.post("/text/generate")
-    def generate(body: GenerateIn):
-        text = run(catalog, "gpt2", body.prompt, max_new_tokens=body.max_new_tokens,
-                   temperature=body.temperature)
-        return {"model": "gpt2", "generated_text": text}
+    # @api.post("/text/generate")
+    # def generate(body: GenerateIn):
+    #     text = run(catalog, "gpt2", body.prompt, max_new_tokens=body.max_new_tokens,
+    #                temperature=body.temperature)
+    #     return {"model": "gpt2", "generated_text": text}
 
     @api.post("/timeseries/{model}")
     def timeseries(model: Literal["tcn-segmenter", "tcn-sequence"], body: SeriesIn):
