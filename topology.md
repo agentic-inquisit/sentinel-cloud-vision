@@ -13,4 +13,5 @@
 3. system-alerts:
     - Description: Real-time triggers for model drift or critical events.
     - Partitions: 1.
+    - Backup: cpy. 
     - Cleanup Policy: delete.
