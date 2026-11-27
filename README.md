@@ -10,6 +10,30 @@
 
 ![GCP deployment architecture: Cloud Run gRPC ingestion → VPC → GKE inference](assets/gcp-architecture.svg)
 
+## 📷 Camera Ingestion Pipeline (Nodes Plan)
+
+Target path for live camera video. The gRPC contracts and services are written
+(`proto/`, `streaming/`).
+
+```
+Hikvision DS-2CD2043G2-I (4 MP, PoE)
+   │ RTSP over the site LAN only (never exposed to the internet)
+   │   main stream: rtsp://<user>:<pass>@<cam-ip>:554/Streaming/Channels/101
+   │   sub-stream:  rtsp://<user>:<pass>@<cam-ip>:554/Streaming/Channels/102   ← used for inference
+   ▼
+Edge agent (small box or PC on site)
+   decode the sub-stream → sample N fps → motion filter → JPEG
+   │ gRPC StreamFrames over TLS, device token; reconnects before 60 min
+   ▼
+Cloud Run: ingest            ← public edge, scales on demand
+   auth, validate, backpressure, preprocess (downscale to model size)
+   │ unary Detect + routing headers, over Direct VPC egress + an ID token
+   ▼
+GKE: internal Gateway ──► detector-v1 / detector-v2 (GPU pool)
+```
+
+---
+
 ## 🚀 Quick Start
 
 ### Cloud Server
