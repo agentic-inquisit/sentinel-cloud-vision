@@ -1,0 +1,53 @@
+// Ingest contract: devices -> ingest service, through the external Gateway.
+//
+// Auth: device JWT in the `authorization: Bearer <token>` metadata. Its claims
+// (device_id, device_class, tenant) decide routing; clients cannot set the
+// device class themselves.
+//
+// Optional client metadata:
+//   x-sentinel-model-version  pin a detector version ("v1" | "v2"); otherwise the
+//                             Gateway picks one from the device class.
+syntax = "proto3";
+
+package sentinel.v1;
+
+import "sentinel/v1/inference.proto";
+
+service Ingest {
+  // Live camera: send frames as they are captured, receive detections on the same
+  // stream. Under load the service keeps only the newest frame per stream and drops
+  // older ones (fresh beats complete for real-time detection); see frames_dropped.
+  rpc StreamFrames(stream Frame) returns (stream Detection);
+
+  // One-off image.
+  rpc SubmitImage(Image) returns (DetectionResult);
+}
+
+message Frame {
+  string stream_id = 1;
+  uint64 seq = 2;            // increasing per stream
+  int64 capture_ts_us = 3;   // device clock, microseconds
+  bytes jpeg = 4;            // one JPEG per message (gRPC's default 4 MB cap applies)
+  int32 width = 5;
+  int32 height = 6;
+}
+
+message Detection {
+  string stream_id = 1;
+  uint64 seq = 2;                         // seq of the frame these detections are for
+  int64 capture_ts_us = 3;
+  repeated DetectedObject objects = 4;
+  ServedBy served_by = 5;
+  uint64 frames_dropped = 6;              // dropped on this stream so far (backpressure)
+  float latency_ms = 7;                   // ingest receive -> result
+}
+
+message Image {
+  bytes jpeg = 1;
+}
+
+message DetectionResult {
+  repeated DetectedObject objects = 1;
+  ServedBy served_by = 2;
+  float latency_ms = 3;
+}

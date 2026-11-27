@@ -1,0 +1,53 @@
+// Inference contract: ingest -> detector backends, through the internal Gateway.
+//
+// Unary on purpose (doc 63 §4): the L7 load balancer then balances per request,
+// even though device -> ingest is a long-lived bidirectional stream.
+//
+// Routing is not in the message: the internal Gateway's GRPCRoute matches these
+// gRPC metadata headers, which only the ingest service sets:
+//   x-sentinel-model          e.g. "detector"
+//   x-sentinel-model-version  "v1" | "v2"   (only when the client pinned a version)
+//   x-sentinel-device-class   "camera" | "mobile" | "edge-agent"   (from the device token)
+syntax = "proto3";
+
+package sentinel.v1;
+
+service Inference {
+  rpc Detect(DetectRequest) returns (DetectResponse);
+}
+
+message DetectRequest {
+  bytes jpeg = 1;          // one encoded frame
+  float min_score = 2;     // 0 = backend default
+  string request_id = 3;   // for log correlation
+}
+
+message Box {
+  float x1 = 1;
+  float y1 = 2;
+  float x2 = 3;
+  float y2 = 4;
+}
+
+message DetectedObject {
+  string label = 1;
+  float score = 2;
+  Box box = 3;             // pixels, in the submitted image
+}
+
+// Which backend answered, and the routing headers it received. Lets clients and
+// tests confirm the Gateway routed the request where the headers said.
+message ServedBy {
+  string model = 1;                              // "detector"
+  string version = 2;                            // "v1" | "v2"
+  string backend = 3;                            // e.g. "fasterrcnn_resnet50_fpn"
+  map<string, string> routing_headers_seen = 4;
+}
+
+message DetectResponse {
+  repeated DetectedObject objects = 1;
+  ServedBy served_by = 2;
+  float inference_ms = 3;
+  int32 image_width = 4;
+  int32 image_height = 5;
+}
